@@ -3,7 +3,6 @@ A quick and efficient tool for automating the design of optimized species-specif
 * **assay_design_env.yml**: Use to create a conda environment containing all necessary dependencies.
 * **config.ini**: configuration file, user alters parameters in this file.
 * **Align_ClassifyTaxon.py**: aligns and scans full mitochondrial sequence files to find optimal windows for assay design. Designs assays and ranks based on target species sensitivity and specificity.
-
 \
 
 [Primer3web](https://primer3.ut.ee/) and [Primer3Plus](https://www.primer3plus.com/) are widely used web-based tools for the *in silico* design of primer-probe assays for qPCR and ddPCR. The user can specify a sequence template for a given target species, and the programs will design an assay for that region, optimized to reduce secondary structure formation. However the choice of region to use for assay design can be a challenging one, particularly when one wants to robustly indentify the presence or quantity of target-species DNA in an environmental DNA (eDNA) sample. The ideal stretch of sequence will exhibit both sensitivity (low genetic diversity among target-species sequences), and specificity (high genetic distance between target and non-target sequences). However visually identifying sequence regions that satisfy such criteria in very large alignment files is a difficult, time consuming, and inherently subjective task. \
