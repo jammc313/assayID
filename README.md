@@ -1,6 +1,4 @@
-# assayID
-
-<table>
+<table border="0">
 <tr>
 <td><img src="example_images/assayID_icon.png" alt="assayID" width="100"></td>
 <td><h1>assayID</h1></td>
