@@ -17,8 +17,8 @@ Simply download the files, edit the configuration file, and run the python scrip
 - The output will include an excel file containing ranked assays, saved to your working directory. The user can use these primer-probe sets as a basis for further in silico analysis (for instance in primerBLAST or OligoAnalyzer) and using with qPCR and dPCR assays. A pairwise plot showing statistics calculaated for all assays is also outputted, together with a simple diagram of a circular mt-genome can also be outputted, showing the locations of the top 10 ranked assays.
 
 
-<img src="example_images/pairwise_comparisons.png" width="500">
-<img src="example_images/mtgenome_assays.png" width="500">
+<img src="example_images/pairwise_comparisons.png" width="800">
+<img src="example_images/mtgenome_assays.png" width="800">
 
 
 ## Author
