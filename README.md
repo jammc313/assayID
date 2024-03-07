@@ -3,11 +3,10 @@ A quick and efficient tool for automating the design of optimized species-specif
 * **assay_design_env.yml**: Use to create a conda environment containing all necessary dependencies.
 * **config.ini**: configuration file, user alters parameters in this file.
 * **Align_ClassifyTaxon.py**: aligns and scans full mitochondrial sequence files to find optimal windows for assay design. Designs assays and ranks based on target species sensitivity and specificity.
-\
 
 [Primer3web](https://primer3.ut.ee/) and [Primer3Plus](https://www.primer3plus.com/) are widely used web-based tools for the *in silico* design of primer-probe assays for qPCR and ddPCR. The user can specify a sequence template for a given target species, and the programs will design an assay for that region, optimized to reduce secondary structure formation. However the choice of region to use for assay design can be a challenging one, particularly when one wants to robustly indentify the presence or quantity of target-species DNA in an environmental DNA (eDNA) sample. The ideal stretch of sequence will exhibit both sensitivity (low genetic diversity among target-species sequences), and specificity (high genetic distance between target and non-target sequences). However visually identifying sequence regions that satisfy such criteria in very large alignment files is a difficult, time consuming, and inherently subjective task. \
 \
-I created assayID to address this problem. I provides a fast and efficient, robust method for species-specific assay design. The emphasis has been on creating a user-friendly tool - **almost no coding knowledge required to use it!** \
+assayID was created to address this problem. I provides a fast and efficient, robust method for species-specific assay design. The emphasis has been on creating a user-friendly tool - **almost no coding knowledge required to use it!** \
 \
 Simply download the files, edit the configuration file, and run the python script. Depending on specified-parameters in that file, the program will:
 - Use clustal omega to align a fasta file containing full mitochondrial genomes from a range of target and non-target species. Ideally, there should be more than one sequence representing your target species. If an alignment file already exists, the program will skip this step and use that file as input.
