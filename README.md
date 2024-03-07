@@ -14,7 +14,10 @@ Simply download the files, edit the configuration file, and run the python scrip
 - Use Primer3 to design primer-probe sets for the consensus sequence of target species sequences in each window.
 - Identify the regions covered by the assays and calculates a range of diversity and distance metrics for each assay covered region. This includes measures of target species genetic diversity and distance measures between target and non-target sequences (e.g. Shannon Entropy, sequence similarity, nucleotide divergence).
 - The designed assays are then ranked accoring to their specificity and sensitivity. An ideal assay will target a region that has low genetic diversity for the target species seqeunces, and high genetic distance to non-target species sequences. A multivariate statistic method: Technique for Order of Preference by Similarity to Ideal Solution (TOPSIS) is used to rank designed assays and identify those with the optimal balance between specificity and sensitivity.
-- The output will include an excel file containing ranked assays, saved to your working directory. The user can use these primer-probe sets as a basis for further in silico analysis (for instance in primerBLAST or OligoAnalyzer) and using with qPCR and dPCR assays. A simple diagram of a circular mt-genome can also be outputted, showing the locations of the top 10 ranked assays.
+- The output will include an excel file containing ranked assays, saved to your working directory. The user can use these primer-probe sets as a basis for further in silico analysis (for instance in primerBLAST or OligoAnalyzer) and using with qPCR and dPCR assays. A pairwise plot showing statistics calculaated for all assays is also outputted, together with a simple diagram of a circular mt-genome can also be outputted, showing the locations of the top 10 ranked assays.
+
+<img src="https://github.com/jammc313/assayID/example_images/pairwise_stats" width="800"> \
+<img src="https://github.com/jammc313/assayID/example_images/top10assays" width="800"> \
 
 ## Author
 James McKenna (james.andrew.mckenna@hi.no) \
