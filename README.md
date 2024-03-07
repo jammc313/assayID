@@ -1,4 +1,4 @@
-## assayID
+# assayID
 
 <img src="example_images/assayID_icon.png" alt="assayID" width="200">
 ## assayID
