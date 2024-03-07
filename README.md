@@ -38,6 +38,6 @@ conda activate assay_design_env
 ```
 * Edit the parameters in the config.ini file. This includes specifying your target species, the path to your (aligned or unaligned) fasta file containing full mitochondrial sequences downlaoded from public repositories such as ncbi or genbank.
 * Run the script!   
-* ```
+```
 python Align_ClassifyTaxon.py
 ```
