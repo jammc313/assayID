@@ -1,4 +1,13 @@
 # assayID
+
+<table>
+<tr>
+<td><img src="example_images/assayID_icon.png" alt="assayID" width="100"></td>
+<td><h1>assayID</h1></td>
+</tr>
+</table>
+
+
 A quick and efficient tool for automating the design of optimized species-specific qPCR/ddPCR assays. 
 * **assay_design_env.yml**: Use to create a conda environment containing all necessary dependencies.
 * **config.ini**: configuration file, user alters parameters in this file.
