@@ -1,9 +1,6 @@
-<table border="0">
-<tr>
-<td><img src="example_images/assayID_icon.png" alt="assayID" width="100"></td>
-<td><h1>assayID</h1></td>
-</tr>
-</table>
+
+<img src="example_images/assayID_icon.png" alt="assayID" width="200">
+# assayID
 
 
 A quick and efficient tool for automating the design of optimized species-specific qPCR/ddPCR assays. 
