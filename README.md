@@ -20,6 +20,9 @@ Simply download the files, edit the configuration file, and run the python scrip
 
 ![pairwisestats](example_images/pairwise_comparisons.png) \
 
+<img src="example_images/mtgenome_assays.png" width="300">
+
+
 ## Author
 James McKenna (james.andrew.mckenna@hi.no) \
 https://github.com/jammc313/assayID
