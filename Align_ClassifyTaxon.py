@@ -27,7 +27,7 @@ from Bio.SeqFeature import SeqFeature, FeatureLocation
 import configparser
 
 
-# Read input from configuration file 
+# Read input from configuration file
 config = configparser.ConfigParser()
 config.read('config.ini')
 
@@ -64,6 +64,13 @@ working_alignment = AlignIO.read(aligned_fasta, "fasta")
 target_taxon = config['SPECIES']['target_taxon']
 target = target_taxon.replace(" ", "_")
 
+# Create a directory to hold output results, named after your target species
+target_dir = f'{target}'
+
+# Check if the directory exists, if not create it
+if not os.path.exists(target_dir):
+    os.makedirs(target_dir)
+
 
 ## Produce an output file to show what species are present in the multiple sequence alignment file
 species_accessions = {} # Dictionary to hold species and their accession numbers
@@ -83,7 +90,7 @@ for record in working_alignment:
 
 # Convert the species_accessions dictionary to a DataFrame
 species_accessions_list = [{
-    'Species': species, 
+    'Species': species,
     'Accession Numbers': ';'.join(accessions),
     'Count': len(accessions)  # Count the number of accessions
 } for species, accessions in species_accessions.items()]
@@ -91,8 +98,8 @@ species_accessions_list = [{
 species_accessions_df = pd.DataFrame(species_accessions_list)
 
 # Save the DataFrame to an Excel file
-species_accessions_df.to_excel(f'{target}/species_accessions.xlsx', index=False)
-print(f"Outputted to file: {target}/species_accessions.xlsx\nContains list of all species and accessions present in multiple sequence alignment file")        
+species_accessions_df.to_excel(f'{target_dir}/species_accessions.xlsx', index=False)
+print(f"Outputted to file: {target_dir}/species_accessions.xlsx\nContains list of all species and accessions present in multiple sequence alignment file")
 
 
 # Functions for extracting windows
@@ -126,7 +133,7 @@ def check_gap_pattern_consistency(target_windows):
     # Compare the gap positions of the remaining sequences to the reference
     for window in target_windows[1:]:
         current_gap_positions = {idx for idx, char in enumerate(window) if char == '-'}
-        
+
         # If the gap positions differ, the pattern is inconsistent
         if current_gap_positions != reference_gap_positions:
             return False
@@ -143,7 +150,7 @@ def extract_windows(alignment, window_size, target_taxon, step_size):
 
     total_length = len(alignment[0].seq)
     progress_bar = tqdm(total=total_length, desc="Processing windows")
-    
+
     i = 0  # Start position in the alignment
     while i < total_length:
         # Calculate the end position for each target sequence, extending as needed to include enough valid nucleotides
@@ -154,7 +161,7 @@ def extract_windows(alignment, window_size, target_taxon, step_size):
         # If the maximum end position is the same as the total length, we've hit the end without finding enough valid nucleotides
         if max_end_pos >= total_length:
             print(f"No valid windows of target sequence after position {i} in alignment file.")
-            break  
+            break
 
         # Extract sequences for the current window across all target sequences
         target_windows = [alignment[idx].seq[i:max_end_pos] for idx in target_indices]
@@ -163,7 +170,7 @@ def extract_windows(alignment, window_size, target_taxon, step_size):
         if check_gap_pattern_consistency(target_windows):
             # If the window is permissible, record it
             permissible_windows.append((i + 1, max_end_pos))  # Adjust start position to be 1-based
-            
+
             # Find the first valid nucleotide position in the window for the next start
             first_valid_nucleotide_pos = next((idx for idx, char in enumerate(target_windows[0]) if char != '-'), None)
             if first_valid_nucleotide_pos is not None:
@@ -177,15 +184,15 @@ def extract_windows(alignment, window_size, target_taxon, step_size):
         else:
             # If the window is not permissible, only increment the start position by step size
             next_start = i + step_size
-        
+
         progress_update = next_start - i
         progress_bar.update(progress_update)  # Manually update the progress bar based on the actual progress
         i = next_start  # Update start position for next window
-    
+
     progress_bar.close()  # Ensure to close the progress bar after completion
     return permissible_windows
 
-# Functions for calculating diversity and distance statistics  
+# Functions for calculating diversity and distance statistics
 
 def calculate_shannon_entropy(sequences):
     """
@@ -286,12 +293,12 @@ def get_consensus_sequence(sequences):
             base = seq[i].upper()
             if base in pos_counts:  # Only count A, C, G, T
                 pos_counts[base] += 1
-        
+
         if sum(pos_counts.values()) == 0:  # If all are gaps, consider as a gap in consensus
             consensus += '-'
         else:
             consensus += max(pos_counts, key=pos_counts.get)
-    
+
     consensus = consensus.replace('-', '') # exclude gaps
     return consensus
 
@@ -409,7 +416,7 @@ def design_and_assess_primers(dataframe):
             dataframe.at[index, 'L Primer GC'] = primer_L_GC
             dataframe.at[index, 'R Primer GC'] = primer_R_GC
             dataframe.at[index, 'Oligo GC'] = oligo_GC
-            
+
         else:
             # Handle the case where primers are not found
             dataframe.at[index, 'L Primer'] = 'No Primer Found'
@@ -433,8 +440,8 @@ primerdesign_windows = design_and_assess_primers(window_df)
 
 
 # Filter out windows were primer/probe design failed, and sort based on secondary structure formation.
-remove_NA_df = primerdesign_windows[(primerdesign_windows['L Primer'] != 'No Primer Found') & 
-                 (primerdesign_windows['R Primer'] != 'No Primer Found') & 
+remove_NA_df = primerdesign_windows[(primerdesign_windows['L Primer'] != 'No Primer Found') &
+                 (primerdesign_windows['R Primer'] != 'No Primer Found') &
                  (primerdesign_windows['Internal oligo'] != 'No Oligo Found')]
 
 # drop duplicated sets of primers/probe
@@ -461,12 +468,12 @@ def find_primer_region(consensus, l_primer, r_primer, window_start):
     l_start = consensus.find(l_primer)
     r_primer_revcomp = reverse_complement(r_primer)
     r_start = consensus.find(r_primer_revcomp)
-    
+
     # Calculate the absolute positions in the alignment file
     product_start = window_start + l_start
     product_end = window_start + r_start + len(r_primer) - 1
     product_length = product_end - product_start + 1
-    
+
     return product_start, product_end, product_length
 
 # Now apply the updated function to the dataframe
@@ -482,7 +489,7 @@ def calculate_metrics_for_region(row, alignment, target_taxon):
     """
     start_index = row['Product Start'] - 1 # adjust for python's 0-based indexing
     end_index = row['Product End']
-    
+
     # Extract sequences for target and non-target groups within the region
     target_sequences = [str(seq.seq[start_index:end_index]) for seq in alignment if is_target_taxon(seq, target_taxon)]
     non_target_sequences = [str(seq.seq[start_index:end_index]) for seq in alignment if not is_target_taxon(seq, target_taxon)]
@@ -490,19 +497,25 @@ def calculate_metrics_for_region(row, alignment, target_taxon):
     # Calculate metrics
     shannon_entropy_target = calculate_shannon_entropy(target_sequences)
     shannon_entropy_non_target = calculate_shannon_entropy(non_target_sequences)
-    sequence_similarity = calculate_sequence_similarity(target_sequences, non_target_sequences)            
+    sequence_similarity = calculate_sequence_similarity(target_sequences, non_target_sequences)
     nucleotide_diversity_target = calculate_nucleotide_diversity(target_sequences)
     nucleotide_diversity_non_target = calculate_nucleotide_diversity(non_target_sequences)
 
-    return pd.Series([shannon_entropy_target, shannon_entropy_non_target, sequence_similarity, 
+    return pd.Series([shannon_entropy_target, shannon_entropy_non_target, sequence_similarity,
                       nucleotide_diversity_target, nucleotide_diversity_non_target])
 
 # Apply the function to each row in the DataFrame
-metrics_columns = ['Shannon Entropy Target', 'Shannon Entropy Non-Target', 'Sequence similarity', 
+metrics_columns = ['Shannon Entropy Target', 'Shannon Entropy Non-Target', 'Sequence similarity',
                    'Nucleotide Diversity Target', 'Nucleotide Diversity Non-Target']
 
 sorted_df[metrics_columns] = sorted_df.apply(calculate_metrics_for_region, axis=1, args=(working_alignment, target_taxon))
 
+# Assuming 'target' is already assigned from your config.ini file
+plot_dir = f'{target_dir}/plots'
+
+# Check if the directory exists, if not create it
+if not os.path.exists(plot_dir):
+    os.makedirs(plot_dir)
 
 # Plot distribution of Shannon Entropy for Target Sequences
 plt.figure(figsize=(10, 6))
@@ -510,7 +523,7 @@ sns.histplot(sorted_df['Shannon Entropy Target'], color='green', kde=True)
 plt.title('Distribution of Shannon Entropy for Target Sequences')
 plt.xlabel('Shannon Entropy Target')
 plt.ylabel('Frequency')
-plt.savefig(f'{target}/shannon_entropy_target_distribution.png')
+plt.savefig(f'{plot_dir}/shannon_entropy_target_distribution.png')
 plt.close()
 
 
@@ -520,7 +533,7 @@ sns.histplot(sorted_df['Shannon Entropy Non-Target'], color='blue', kde=True)
 plt.title('Distribution of Shannon Entropy for Non-Target Sequences')
 plt.xlabel('Shannon Entropy Non-Target')
 plt.ylabel('Frequency')
-plt.savefig(f'{target}/shannon_entropy_non_target_distribution.png')
+plt.savefig(f'{plot_dir}/shannon_entropy_non_target_distribution.png')
 plt.close()
 
 
@@ -530,7 +543,7 @@ sns.histplot(sorted_df['Sequence similarity'], color='red', kde=True)
 plt.title('Distribution of Target vs NonTarget Sequence Similarity')
 plt.xlabel('Sequence Similarity')
 plt.ylabel('Frequency')
-plt.savefig(f'{target}/sequence_similarity_distribution.png')
+plt.savefig(f'{plot_dir}/sequence_similarity_distribution.png')
 plt.close()
 
 
@@ -540,7 +553,7 @@ sns.histplot(sorted_df['Nucleotide Diversity Target'], color='green', kde=True)
 plt.title('Nucleotide Diversity Target')
 plt.xlabel('Nucleotide Diversity Target')
 plt.ylabel('Frequency')
-plt.savefig(f'{target}/nucleotide_diversity_target_distribution.png')
+plt.savefig(f'{plot_dir}/nucleotide_diversity_target_distribution.png')
 plt.close()
 
 
@@ -550,18 +563,18 @@ sns.histplot(sorted_df['Nucleotide Diversity Non-Target'], color='blue', kde=Tru
 plt.title('Nucleotide Diversity Non-Target')
 plt.xlabel('Nucleotide Diversity Non-Target')
 plt.ylabel('Frequency')
-plt.savefig(f'{target}/nucleotide_diversity_non_target_distribution.png')
+plt.savefig(f'{plot_dir}/nucleotide_diversity_non_target_distribution.png')
 plt.close()
 
 
 # Plot and save pairwise correlations of all metrics.
-metric_columns = ['Shannon Entropy Target','Shannon Entropy Non-Target','Sequence similarity', 
+metric_columns = ['Shannon Entropy Target','Shannon Entropy Non-Target','Sequence similarity',
                   'Nucleotide Diversity Target', 'Nucleotide Diversity Non-Target']
 # Create a subset dataframe with these columns
 metrics_df = sorted_df[metric_columns]
 # Create pairplot
 pairplot = sns.pairplot(metrics_df)
-plt.savefig(f'{target}/pairwise_comparisons.png')
+plt.savefig(f'{plot_dir}/pairwise_comparisons.png')
 plt.close()
 
 
@@ -579,7 +592,7 @@ ideal_stats = {
 
 worst_stats = {
     'Shannon Entropy Target': 2,
-    'Shannon Entropy Non-Target': 0,  
+    'Shannon Entropy Non-Target': 0,
     'Sequence similarity': 1,
     'Nucleotide Diversity Target': 1,
     'Nucleotide Diversity Non-Target': 0
@@ -629,8 +642,8 @@ sorted_df['TOPSIS Rank'] = sorted_df['Similarity to Ideal'].rank(method='max', a
 ranked_df = sorted_df.sort_values(by='TOPSIS Rank')
 
 # Save the DataFrame to an Excel file
-ranked_df.to_excel(f'{target}/ranked_assays.xlsx', index=False)
-print(f"Outputted to file: {target}/ranked_assays.xlsx\nContains TOPSIS ranked assays")   
+ranked_df.to_excel(f'{target_dir}/ranked_assays.xlsx', index=False)
+print(f"Outputted to file: {target_dir}/ranked_assays.xlsx\nContains TOPSIS ranked assays")
 
 
 # Optionally produce diagram showing where top ranked assays bind in mt-genome
@@ -646,20 +659,20 @@ if reference_genome_accession:  # If an accession number is provided
         record = SeqIO.read(handle, "genbank")
         handle.close()
         return record
-    
+
     mt_genome_record = fetch_genome(reference_genome_accession)
-    
+
     # Extract the top 10 assays
     top_10_assays = ranked_df.head(10)
-    
+
     # Extract their start and end positions as tuples (start, end)
     top_10_assay_positions = [(row['Product Start'], row['Product End']) for index, row in top_10_assays.iterrows()]
-    
+
     def create_circular_genome_diagram(record, top_10_assay_positions):
         gd_diagram = GenomeDiagram.Diagram("Mitochondrial Genome")
         gd_track_for_features = gd_diagram.new_track(1, name="Annotated Features")
         gd_feature_set = gd_track_for_features.new_set()
-    
+
         # Add genome features
         for feature in record.features:
             if feature.type == "gene":
@@ -671,7 +684,7 @@ if reference_genome_accession:  # If an accession number is provided
 
         # Highlight top 10 assays
         gd_track_for_assays = gd_diagram.new_track(3, name="Assay Regions", greytrack=True)
-        gd_assays = gd_track_for_assays.new_set()  
+        gd_assays = gd_track_for_assays.new_set()
         for i, (start, end) in enumerate(top_10_assay_positions, start=1):
             # Correctly create a feature for each assay region, including strand information
             feature_location = FeatureLocation(start, end, strand=+1)
@@ -679,12 +692,12 @@ if reference_genome_accession:  # If an accession number is provided
             # Add the feature with a specific style
             gd_assays.add_feature(assay_feature, color=colors.red, label=True, label_position="middle", label_size=10, label_color=colors.black, name=f"Assay{i}",
                                   sigil="BIGARROW", arrowshaft_height=1, arrowhead_length=1)
-   
+
         # Draw the diagram
         gd_diagram.draw(format="circular", circular=True, pagesize=(25*cm, 25*cm),
                         start=0, end=len(record), circle_core=0.7)
-        gd_diagram.write(f'{target}/mtgenome_assays.png', "PNG")
-        print(f"Outputted to file: {target}/mtgenome_assays.png\nContains a diagram of an annotated mitochondrial genome showing where top 10 ranked assays target")
+        gd_diagram.write(f'{target_dir}/mtgenome_assays.png', "PNG")
+        print(f"Outputted to file: {target_dir}/mtgenome_assays.png\nContains a diagram of an annotated mitochondrial genome showing where top 10 ranked assays target")
 
     # Example usage (you need to define top_15_assay_positions based on your data)
     create_circular_genome_diagram(mt_genome_record, top_10_assay_positions)
