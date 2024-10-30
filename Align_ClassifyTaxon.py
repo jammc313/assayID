@@ -3,7 +3,6 @@
 
 # ### This python script provides a framework to systematically find optimal window sizes and regions of mt-genomes for discriminating between a target and non-target sequences. 
 
-
 # Import Libraries:
 import os
 import multiprocessing
@@ -25,40 +24,30 @@ from reportlab.lib import colors
 from Bio.Graphics.GenomeDiagram import Diagram, Track, FeatureSet
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 import configparser
+import sys
 
+# Function to expand environment variables in paths
+def expand_path(path):
+    return os.path.expanduser(path)
+
+# Function to run Clustal Omega
+def run_clustalo(input_fasta, output_path):
+    num_cores = os.cpu_count()
+    num_threads = max(1, num_cores - 2)  # Adjust thread count
+    clustal_cmd = ["clustalo", "-i", input_fasta, "-o", output_path, f"--threads={num_threads}"]
+    result = subprocess.run(clustal_cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"ERROR: Clustal Omega failed with the following output:\n{result.stderr}")
+        sys.exit("Clustal Omega alignment process failed. Please check the input FASTA file.")
+
+def run_mafft(input_fasta, output_path):
+    mafft_cmd = ["mafft", "--auto", input_fasta]
+    with open(output_path, 'w') as output_file:
+        subprocess.run(mafft_cmd, stdout=output_file)
 
 # Read input from configuration file
 config = configparser.ConfigParser()
 config.read('config.ini')
-
-
-# Optionally run clustalo multiple sequence alignment. If "aligned_fasta" field present in config.ini file, skip this step.
-unaligned_fasta = config['FILES']['unaligned_fasta']
-aligned_fasta = config['FILES']['aligned_fasta']
-
-# Retrieve number of cores available for clustalo threading
-num_cores = os.cpu_count()
-num_threads = max(1, num_cores - 2)
-
-# Function to run Clustal Omega
-def run_clustalo(unaligned_fasta, output_path="clustalo_aligned.fasta"):
-    clustal_cmd = ["clustalo", "-i", unaligned_fasta, "-o", output_path, f"--threads={num_threads}"]
-    subprocess.run(clustal_cmd)
-    return output_path
-
-# Check which option the user has provided and act accordingly
-if unaligned_fasta:  # If the path to unaligned FASTA is provided
-    print("Running Clustal Omega to align sequences...")
-    aligned_fasta = "clustalo_aligned.fasta"  # Explicitly set the aligned_fasta path
-    run_clustalo(unaligned_fasta, aligned_fasta)
-    print(f"Alignment completed\nOutputted to file: {target}/clustalo_aligned.fasta")
-elif aligned_fasta:  # If the path to an aligned FASTA file is provided
-    print("Skipping Clustalo alignment. Using provided aligned FASTA file.")
-else:
-    print("No FASTA file provided. Please check your config.ini.")
-
-working_alignment = AlignIO.read(aligned_fasta, "fasta")
-
 
 # Retrieve scientific name of target taxon from config.ini
 target_taxon = config['SPECIES']['target_taxon']
@@ -66,11 +55,45 @@ target = target_taxon.replace(" ", "_")
 
 # Create a directory to hold output results, named after your target species
 target_dir = f'{target}'
-
-# Check if the directory exists, if not create it
 if not os.path.exists(target_dir):
     os.makedirs(target_dir)
 
+# Read a alignment method from config.ini (clustal omega or MAFFT)
+alignment_method = config['ALIGNMENT']['method']
+
+# Optionally run clustalo multiple sequence alignment. If "aligned_fasta" field present in config.ini file, skip this step.
+unaligned_fasta = expand_path(config['FILES']['unaligned_fasta'])
+aligned_fasta = expand_path(config['FILES']['aligned_fasta'])
+
+# Check if the necessary files exist before proceeding
+if unaligned_fasta and not os.path.isfile(unaligned_fasta):
+    sys.exit(f"ERROR: Unaligned FASTA file not found at {unaligned_fasta}. Please provide a valid file path.")
+elif aligned_fasta and not os.path.isfile(aligned_fasta):
+    sys.exit(f"ERROR: Aligned FASTA file not found at {aligned_fasta}. Please provide a valid file path.")
+
+# Check which option the user has provided and act accordingly
+if unaligned_fasta and not aligned_fasta:  # Only run if no aligned file provided
+    print(f"Running {alignment_method} to align sequences...")
+    output_fasta_path = os.path.join(target_dir, "aligned_sequences.fasta")
+    if alignment_method.lower() == 'clustalo':
+        run_clustalo(unaligned_fasta, output_fasta_path)
+    elif alignment_method.lower() == 'mafft':
+        run_mafft(unaligned_fasta, output_fasta_path)
+    else:
+        sys.exit("Invalid alignment method specified. Please choose 'clustalo' or 'mafft'.")
+    aligned_fasta = output_fasta_path
+    print(f"Alignment completed. Outputted to file: {aligned_fasta}")
+elif aligned_fasta:  # If the path to an aligned FASTA file is provided
+    print("Skipping alignment. Using provided aligned FASTA file.")
+else:
+    print("No valid FASTA file provided. Please check your config.ini.")
+    sys.exit("Exiting due to lack of valid input FASTA files.")
+
+# Load the alignment
+try:
+    working_alignment = AlignIO.read(aligned_fasta, "fasta")
+except FileNotFoundError:
+    sys.exit(f"ERROR: The aligned FASTA file was not found in {aligned_fasta}.")
 
 ## Produce an output file to show what species are present in the multiple sequence alignment file
 species_accessions = {} # Dictionary to hold species and their accession numbers
@@ -218,6 +241,8 @@ def calculate_sequence_similarity(target_sequences, non_target_sequences):
     """
     Calculate sequence similarity, considering only nucleotide positions in target sequences
     and applying a partial similarity score for gaps in non-target sequences.
+    For each target sequence, find the average similarity score between it and all non-target sequences.
+    Calculate mean and coefficient of variation of these similarity scores among target seqs.
     """
     def similarity_score(target_seq, non_target_seq):
         nucleotide_positions = [i for i, base in enumerate(target_seq) if base != '-']
@@ -234,15 +259,18 @@ def calculate_sequence_similarity(target_sequences, non_target_sequences):
         return score / len(nucleotide_positions) if nucleotide_positions else 0
 
     similarity_scores = []
-
     # Calculate similarity score for each target vs. non-target sequence pair
     for target_seq in target_sequences:
         scores = [similarity_score(target_seq, non_target_seq) for non_target_seq in non_target_sequences]
         average_score = np.mean(scores) if scores else 0
         similarity_scores.append(average_score)
 
+    mean_similarity = np.mean(similarity_scores) if similarity_scores else 0
+    std_deviation = np.std(similarity_scores) if similarity_scores else 0
+    cv = std_deviation / mean_similarity if mean_similarity > 0 else 0
+
     # Return the average similarity score across all target vs. non-target comparisons
-    return np.mean(similarity_scores) if similarity_scores else 0
+    return mean_similarity, cv
 
 def calculate_nucleotide_diversity(sequences):
     """
@@ -263,12 +291,11 @@ def calculate_nucleotide_diversity(sequences):
 
 # Functions for inferring consensus sequences and adding to dataframe
 
-def add_consensus_sequences_to_df(dataframe, alignment_file, target_taxon):
+def add_consensus_sequences_to_df(dataframe, alignment, target_taxon):
     """
     Adds a column to dataframe containing consensus sequence of target taxa sequences within that window 
     Progress indicated with a tqdm bar
     """
-    alignment = AlignIO.read(alignment_file, "fasta")
     target_indices = [i for i, record in enumerate(alignment) if target_taxon in record.description]
 
     # Wrap dataframe.iterrows() with tqdm for progress tracking
@@ -320,8 +347,8 @@ for size in window_sizes:
 window_df = pd.DataFrame(window_data) # Convert list to dataframes
 
 
-# Add consensus sequence for windows that pass. 
-window_df = add_consensus_sequences_to_df(window_df, aligned_fasta, target_taxon)
+# Add consensus sequence for windows that pass.
+window_df = add_consensus_sequences_to_df(window_df, working_alignment, target_taxon)
 
 
 # Use Primer3 to design optimal primer/probes for windows
@@ -466,18 +493,21 @@ def reverse_complement(seq):
 # Define a function to find the region covered by the primers
 def find_primer_region(consensus, l_primer, r_primer, window_start):
     l_start = consensus.find(l_primer)
+    l_end = l_start + len(l_primer)
     r_primer_revcomp = reverse_complement(r_primer)
     r_start = consensus.find(r_primer_revcomp)
+    r_end = r_start + len(r_primer_revcomp)
 
     # Calculate the absolute positions in the alignment file
-    product_start = window_start + l_start
-    product_end = window_start + r_start + len(r_primer) - 1
-    product_length = product_end - product_start + 1
+    l_start_absolute = window_start + l_start
+    l_end_absolute = window_start + l_end
+    r_start_absolute = window_start + r_start
+    r_end_absolute = window_start + r_end
 
-    return product_start, product_end, product_length
+    return l_start_absolute, l_end_absolute, r_start_absolute, r_end_absolute
 
 # Now apply the updated function to the dataframe
-sorted_df[['Product Start', 'Product End', 'Product Length']] = sorted_df.apply(
+sorted_df[['L Primer Start', 'L Primer End', 'R Primer Start', 'R Primer End']] = sorted_df.apply(
     lambda row: find_primer_region(
         row['Consensus Sequence'], row['L Primer'], row['R Primer'], row['Start']
     ), axis=1, result_type='expand')
@@ -485,28 +515,28 @@ sorted_df[['Product Start', 'Product End', 'Product Length']] = sorted_df.apply(
 
 def calculate_metrics_for_region(row, alignment, target_taxon):
     """
-    Calculate diversity & distance metrics for assay covered regions of MSA file
+    Calculate diversity & distance metrics specifically for primer and oligo binding sites of MSA file
     """
-    start_index = row['Product Start'] - 1 # adjust for python's 0-based indexing
-    end_index = row['Product End']
+    # Extract regions for primer and oligo binding sites from the row
+    l_start, l_end, r_start, r_end = row[['L Primer Start', 'L Primer End', 'R Primer Start', 'R Primer End']]
 
     # Extract sequences for target and non-target groups within the region
-    target_sequences = [str(seq.seq[start_index:end_index]) for seq in alignment if is_target_taxon(seq, target_taxon)]
-    non_target_sequences = [str(seq.seq[start_index:end_index]) for seq in alignment if not is_target_taxon(seq, target_taxon)]
+    target_sequences = [str(seq.seq[l_start:l_end] + seq.seq[r_start:r_end]) for seq in alignment if is_target_taxon(seq, target_taxon)]
+    non_target_sequences = [str(seq.seq[l_start:l_end] + seq.seq[r_start:r_end]) for seq in alignment if not is_target_taxon(seq, target_taxon)]
 
     # Calculate metrics
     shannon_entropy_target = calculate_shannon_entropy(target_sequences)
     shannon_entropy_non_target = calculate_shannon_entropy(non_target_sequences)
-    sequence_similarity = calculate_sequence_similarity(target_sequences, non_target_sequences)
+    sequence_similarity, sequence_cv = calculate_sequence_similarity(target_sequences, non_target_sequences)
     nucleotide_diversity_target = calculate_nucleotide_diversity(target_sequences)
     nucleotide_diversity_non_target = calculate_nucleotide_diversity(non_target_sequences)
 
     return pd.Series([shannon_entropy_target, shannon_entropy_non_target, sequence_similarity,
-                      nucleotide_diversity_target, nucleotide_diversity_non_target])
+                      sequence_cv, nucleotide_diversity_target, nucleotide_diversity_non_target])
 
 # Apply the function to each row in the DataFrame
 metrics_columns = ['Shannon Entropy Target', 'Shannon Entropy Non-Target', 'Sequence similarity',
-                   'Nucleotide Diversity Target', 'Nucleotide Diversity Non-Target']
+                   'Sequence CV', 'Nucleotide Diversity Target', 'Nucleotide Diversity Non-Target']
 
 sorted_df[metrics_columns] = sorted_df.apply(calculate_metrics_for_region, axis=1, args=(working_alignment, target_taxon))
 
@@ -517,61 +547,30 @@ plot_dir = f'{target_dir}/plots'
 if not os.path.exists(plot_dir):
     os.makedirs(plot_dir)
 
-# Plot distribution of Shannon Entropy for Target Sequences
-plt.figure(figsize=(10, 6))
-sns.histplot(sorted_df['Shannon Entropy Target'], color='green', kde=True)
-plt.title('Distribution of Shannon Entropy for Target Sequences')
-plt.xlabel('Shannon Entropy Target')
-plt.ylabel('Frequency')
-plt.savefig(f'{plot_dir}/shannon_entropy_target_distribution.png')
-plt.close()
+plot_columns = ['Shannon Entropy Target', 'Shannon Entropy Non-Target', 'Sequence similarity',
+                   'Sequence CV', 'Nucleotide Diversity Target', 'Nucleotide Diversity Non-Target']
 
+# Function to plot metrics with checks on data variability
+def plot_distribution(data, column, plot_dir, color, kde=True):
+    plt.figure(figsize=(10, 6))
+    sns.histplot(data[column], color=color, kde=kde)
+    plt.title(f'Distribution of {column}')
+    plt.xlabel(column)
+    plt.ylabel('Frequency')
+    filename = f'{plot_dir}/{column.lower().replace(" ", "_")}_distribution.png'
+    plt.savefig(filename)
+    plt.close()
+    return filename
 
-# Plot distribution of Shannon Entropy for Non-Target Sequences
-plt.figure(figsize=(10, 6))
-sns.histplot(sorted_df['Shannon Entropy Non-Target'], color='blue', kde=True)
-plt.title('Distribution of Shannon Entropy for Non-Target Sequences')
-plt.xlabel('Shannon Entropy Non-Target')
-plt.ylabel('Frequency')
-plt.savefig(f'{plot_dir}/shannon_entropy_non_target_distribution.png')
-plt.close()
+colors = ['green', 'blue', 'red', 'green', 'blue']
+kde_settings = [True, True, True, True, True]
+# Plot all metrics using the generalized function
+for column, color, kde in zip(plot_columns, colors, kde_settings):
+    filename = plot_distribution(sorted_df, column, plot_dir, color, kde)
+    print(f"Plot saved to: {filename}")
 
-
-# Plot distribution of Sequence similarity
-plt.figure(figsize=(10, 6))
-sns.histplot(sorted_df['Sequence similarity'], color='red', kde=True)
-plt.title('Distribution of Target vs NonTarget Sequence Similarity')
-plt.xlabel('Sequence Similarity')
-plt.ylabel('Frequency')
-plt.savefig(f'{plot_dir}/sequence_similarity_distribution.png')
-plt.close()
-
-
-# Plot Nucleotide Diversity Target
-plt.figure(figsize=(10, 6))
-sns.histplot(sorted_df['Nucleotide Diversity Target'], color='green', kde=True)
-plt.title('Nucleotide Diversity Target')
-plt.xlabel('Nucleotide Diversity Target')
-plt.ylabel('Frequency')
-plt.savefig(f'{plot_dir}/nucleotide_diversity_target_distribution.png')
-plt.close()
-
-
-# Plot Nucleotide Diversity Non-Target
-plt.figure(figsize=(10, 6))
-sns.histplot(sorted_df['Nucleotide Diversity Non-Target'], color='blue', kde=True)
-plt.title('Nucleotide Diversity Non-Target')
-plt.xlabel('Nucleotide Diversity Non-Target')
-plt.ylabel('Frequency')
-plt.savefig(f'{plot_dir}/nucleotide_diversity_non_target_distribution.png')
-plt.close()
-
-
-# Plot and save pairwise correlations of all metrics.
-metric_columns = ['Shannon Entropy Target','Shannon Entropy Non-Target','Sequence similarity',
-                  'Nucleotide Diversity Target', 'Nucleotide Diversity Non-Target']
 # Create a subset dataframe with these columns
-metrics_df = sorted_df[metric_columns]
+metrics_df = sorted_df[plot_columns]
 # Create pairplot
 pairplot = sns.pairplot(metrics_df)
 plt.savefig(f'{plot_dir}/pairwise_comparisons.png')
@@ -586,6 +585,7 @@ ideal_stats = {
     'Shannon Entropy Target': 0,
     'Shannon Entropy Non-Target': 2,  # Assuming entropy is measured in bits
     'Sequence similarity': 0,
+    'Sequence CV': 0,
     'Nucleotide Diversity Target': 0,
     'Nucleotide Diversity Non-Target': 1
 }
@@ -594,6 +594,7 @@ worst_stats = {
     'Shannon Entropy Target': 2,
     'Shannon Entropy Non-Target': 0,
     'Sequence similarity': 1,
+    'Sequence CV': 1,
     'Nucleotide Diversity Target': 1,
     'Nucleotide Diversity Non-Target': 0
 }
@@ -604,6 +605,7 @@ weights = {
     'Shannon Entropy Target': 1.0,  # Important, but standard weight
     'Shannon Entropy Non-Target': 1.0,  # Less important
     'Sequence similarity': 2.0,  # Most important
+    'Sequence CV': 2.0,  # Most important
     'Nucleotide Diversity Target': 1.0,
     'Nucleotide Diversity Non-Target': 1.0  # Less important
 }
@@ -666,7 +668,7 @@ if reference_genome_accession:  # If an accession number is provided
     top_10_assays = ranked_df.head(10)
 
     # Extract their start and end positions as tuples (start, end)
-    top_10_assay_positions = [(row['Product Start'], row['Product End']) for index, row in top_10_assays.iterrows()]
+    top_10_assay_positions = [(row['L Primer Start'], row['R Primer End']) for index, row in top_10_assays.iterrows()]
 
     def create_circular_genome_diagram(record, top_10_assay_positions):
         gd_diagram = GenomeDiagram.Diagram("Mitochondrial Genome")
